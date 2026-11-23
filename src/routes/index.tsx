@@ -1,30 +1,116 @@
+
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, View } from 'react-native';
+
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+
 import Login from '../screens/Login';
 import Cadastro from '../screens/Cadastro';
 import Home from '../screens/Home';
-import type { RootStackParamList } from './types';
 import Perfil from '../screens/Perfil';
 import Criar from '../screens/Criar';
 
+import type { RootStackParamList } from './types';
 
+import {
+  AuthProvider,
+  useAuth,
+  type UsuarioAutenticado,
+} from '../context/AuthContext';
+
+import {
+  apiGet,
+  limparTokens,
+} from '../api/api';
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
-export default function Routes() {
+interface MeResponse {
+  message: string;
+  user: UsuarioAutenticado;
+}
+
+function Navegacao() {
+  const {
+    autenticado,
+    setAutenticado,
+    setUsuario,
+  } = useAuth();
+
+  const [verificando, setVerificando] = useState(true);
+
+  useEffect(() => {
+    async function verificarSessao() {
+      try {
+        const resposta = await apiGet<MeResponse>('/auth/me');
+
+        if (
+          resposta.user &&
+          resposta.user.tipo &&
+          resposta.user.username
+        ) {
+          setUsuario(resposta.user);
+          setAutenticado(true);
+        } else {
+          await limparTokens();
+          setUsuario(null);
+          setAutenticado(false);
+        }
+      } catch {
+        await limparTokens();
+        setUsuario(null);
+        setAutenticado(false);
+      } finally {
+        setVerificando(false);
+      }
+    }
+
+    verificarSessao();
+  }, [setAutenticado, setUsuario]);
+
+  if (verificando) {
+    return (
+      <View
+        style={{
+          flex: 1,
+          backgroundColor: '#000',
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <ActivityIndicator size="large" color="#ff3d0a" />
+      </View>
+    );
+  }
+
   return (
     <Stack.Navigator
-    initialRouteName="Login"
-    screenOptions={{
-      headerShown: false,
-      contentStyle: { backgroundColor: '#000' },
-      animation: 'fade',
-    }}
+      screenOptions={{
+        headerShown: false,
+        contentStyle: { backgroundColor: '#000' },
+        animation: 'fade',
+      }}
     >
-      <Stack.Screen name="Login" component={Login} />
-      <Stack.Screen name="Cadastro" component={Cadastro} />
-      <Stack.Screen name="Home" component={Home} />
-      <Stack.Screen name="Perfil" component={Perfil} options={{ headerShown: false }} />
-    <Stack.Screen name="Criar" component={Criar} options={{ headerShown: false }} />
+      {!autenticado ? (
+        <>
+          <Stack.Screen name="Login" component={Login} />
+          <Stack.Screen name="Cadastro" component={Cadastro} />
+        </>
+      ) : (
+        <>
+          <Stack.Screen name="Home" component={Home} />
+          <Stack.Screen name="Perfil" component={Perfil} />
+          <Stack.Screen name="Criar" component={Criar} />
+        </>
+      )}
     </Stack.Navigator>
+  );
+}
+
+export default function Routes() {
+  return (
+    <AuthProvider>
+      <Navegacao />
+    </AuthProvider>
   );
 }
