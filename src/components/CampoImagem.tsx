@@ -1,6 +1,7 @@
+
 import { Image, Pressable, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from '@expo/vector-icons';
 
 type Props = {
   uri: string | null;
@@ -11,11 +12,21 @@ export default function CampoImagem({ uri, onChange }: Props) {
   async function escolher() {
     const resultado = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ['images'],
+      allowsEditing: false,
       quality: 0.8,
+      base64: false,
     });
 
     if (!resultado.canceled) {
-      onChange(resultado.assets[0].uri);
+      const arquivo = resultado.assets[0];
+
+      console.log('IMAGEM:', {
+        uri: arquivo.uri,
+        mimeType: arquivo.mimeType,
+        fileName: arquivo.fileName,
+      });
+
+      onChange(arquivo.uri);
     }
   }
 
@@ -42,5 +53,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     marginBottom: 16,
   },
-  imagem: { width: '100%', height: '100%' },
+  imagem: {
+    width: '100%',
+    height: '100%',
+  },
 });

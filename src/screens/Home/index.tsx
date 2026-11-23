@@ -59,14 +59,17 @@ export default function Home({ navigation }: Props) {
 
   const ehArtista = usuario?.tipo === 'ARTISTA';
 
+  console.log('USUARIO NA HOME:', usuario);
+console.log('TIPO:', usuario?.tipo);
+console.log('EH ARTISTA:', ehArtista);
+
   function abrirPerfilArtista(id_artista: number) {
   navigation.navigate('Perfil', {
     id_artista,
   });
 }
 
-  const nomeExibido =
-    usuario?.nome?.trim() || usuario?.username || 'Usuário';
+const nomeExibido = usuario?.username || 'Usuário';
 
   async function sair() {
     setMenuAberto(false);

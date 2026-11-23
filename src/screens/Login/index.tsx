@@ -19,7 +19,7 @@ import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../routes/types';
 
-import { apiPost } from '../../api/api';
+import { apiGet, apiPost } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<RootStackParamList, 'Login'>;
@@ -38,6 +38,18 @@ interface LoginResponse {
   };
 }
 
+interface MeResponse {
+  message: string;
+  user: {
+    id_autenticacao: number;
+    id_usuario: number;
+    username: string;
+    nome: string;
+    email: string;
+    tipo: 'ARTISTA' | 'USUARIO';
+  };
+}
+
 export default function Login({ navigation }: Props) {
   const [usuario, setUsuarioInput] = useState('');
   const [senha, setSenha] = useState('');
@@ -47,49 +59,67 @@ export default function Login({ navigation }: Props) {
 
   const { setAutenticado, setUsuario } = useAuth();
 
-  async function entrar() {
-    if (carregando) return;
 
-    if (!usuario.trim() || !senha) {
-      Alert.alert('Atenção', 'Informe seu usuário e sua senha.');
-      return;
-    }
 
-    try {
-      setCarregando(true);
+async function entrar() {
+  if (carregando) return;
 
-      const resposta = await apiPost<LoginResponse>(
-        '/auth/login',
-        {
-          username: usuario.trim(),
-          password: senha,
-        },
-      );
-
-      Alert.alert(
-        'Login realizado!',
-        resposta.message || 'Bem-vindo!',
-        [
-          {
-            text: 'OK',
-            onPress: () => {
-              setUsuario(resposta.usuario);
-              setAutenticado(true);
-            },
-          },
-        ],
-      );
-    } catch (error) {
-      const mensagem =
-        error instanceof Error
-          ? error.message
-          : 'Não foi possível realizar o login.';
-
-      Alert.alert('Erro ao entrar', mensagem);
-    } finally {
-      setCarregando(false);
-    }
+  if (!usuario.trim() || !senha) {
+    Alert.alert('Atenção', 'Informe seu usuário e sua senha.');
+    return;
   }
+
+  try {
+    setCarregando(true);
+
+    const resposta = await apiPost<LoginResponse>(
+      '/auth/login',
+      {
+        username: usuario.trim(),
+        password: senha,
+      },
+    );
+
+    // Busca os dados completos após o login.
+const respostaMe = await apiGet<{
+  message: string;
+  user: {
+    id_autenticacao: number;
+    id_usuario: number;
+    username: string;
+    nome: string;
+    email: string;
+    tipo: 'ARTISTA' | 'USUARIO';
+  };
+}>('/auth/me');
+
+setUsuario(respostaMe.user);
+setAutenticado(true);
+
+    console.log('USUÁRIO COMPLETO:', respostaMe.user);
+
+    setUsuario(respostaMe.user);
+    setAutenticado(true);
+
+    Alert.alert(
+      'Login realizado!',
+      resposta.message || 'Bem-vindo!',
+    );
+
+  } catch (error) {
+    const mensagem =
+      error instanceof Error
+        ? error.message
+        : 'Não foi possível realizar o login.';
+
+    Alert.alert('Erro ao entrar', mensagem);
+
+  } finally {
+    setCarregando(false);
+  }
+}
+
+
 
   return (
     <KeyboardAvoidingView

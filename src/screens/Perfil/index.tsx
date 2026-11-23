@@ -1,37 +1,43 @@
-
-import { useEffect, useState } from 'react';
+import { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
+  Alert,
   Image,
   ImageBackground,
+  Linking,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../routes/types';
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../../routes/types";
 
-import { useAuth } from '../../context/AuthContext';
-import BASE_URL, { apiGet } from '../../api/api';
+import { useAuth } from "../../context/AuthContext";
+import BASE_URL, { apiGet, apiPut, apiPutFormData } from "../../api/api";
+import { File } from "expo-file-system";
 
-import Abas from '../../components/Abas';
-import Posts from '../Home/Posts';
-import Eventos from '../Home/Eventos';
+import Abas from "../../components/Abas";
+import Posts from "../Home/Posts";
+import Eventos from "../Home/Eventos";
 
-type Props = NativeStackScreenProps<RootStackParamList, 'Perfil'>;
+type Props = NativeStackScreenProps<RootStackParamList, "Perfil">;
 
 type ArtistaAPI = {
   id_artista: number;
   id_usuario: number;
   url_foto_capa: string | null;
   biografia: string | null;
+  contato_profissional: string | null;
 };
 
 type UsuarioAPI = {
@@ -42,17 +48,18 @@ type UsuarioAPI = {
   url_foto_perfil: string | null;
 };
 
-type Aba = 'eventos' | 'posts';
+
+type Aba = "eventos" | "posts";
 
 const OPCOES: { valor: Aba; rotulo: string }[] = [
-  { valor: 'eventos', rotulo: 'EVENTOS' },
-  { valor: 'posts', rotulo: 'POSTS' },
+  { valor: "eventos", rotulo: "EVENTOS" },
+  { valor: "posts", rotulo: "POSTS" },
 ];
 
 function montarImagem(nomeArquivo?: string | null): string | undefined {
   if (!nomeArquivo) return undefined;
 
-  if (nomeArquivo.startsWith('http')) {
+  if (nomeArquivo.startsWith("http")) {
     return nomeArquivo;
   }
 
@@ -61,16 +68,27 @@ function montarImagem(nomeArquivo?: string | null): string | undefined {
 
 export default function Perfil({ navigation, route }: Props) {
   const insets = useSafeAreaInsets();
-  const { usuario } = useAuth();
+  const { usuario, setUsuario } = useAuth();
 
   const { id_artista } = route.params;
 
   const [artista, setArtista] = useState<ArtistaAPI | null>(null);
   const [dadosUsuario, setDadosUsuario] = useState<UsuarioAPI | null>(null);
 
-  const [aba, setAba] = useState<Aba>('posts');
+  const [aba, setAba] = useState<Aba>("posts");
   const [carregando, setCarregando] = useState(true);
-  const [erro, setErro] = useState('');
+  const [erro, setErro] = useState("");
+  const [enviandoCapa, setEnviandoCapa] = useState(false);
+  const [enviandoFotoPerfil, setEnviandoFotoPerfil] = useState(false);
+
+  const [modalEdicao, setModalEdicao] = useState(false);
+  const [biografiaEditada, setBiografiaEditada] = useState("");
+const [contatoEditado, setContatoEditado] = useState("");
+const [salvandoEdicao, setSalvandoEdicao] = useState(false);
+
+const [nomeEditado, setNomeEditado] = useState("");
+const [emailEditado, setEmailEditado] = useState("");
+const [usernameEditado, setUsernameEditado] = useState("");
 
   const ehDono =
     !!artista &&
@@ -83,7 +101,7 @@ export default function Perfil({ navigation, route }: Props) {
     async function carregarPerfil() {
       try {
         setCarregando(true);
-        setErro('');
+        setErro("");
 
         setArtista(null);
         setDadosUsuario(null);
@@ -105,7 +123,7 @@ export default function Perfil({ navigation, route }: Props) {
           setErro(
             error instanceof Error
               ? error.message
-              : 'Não foi possível carregar o perfil.',
+              : "Não foi possível carregar o perfil.",
           );
         }
       } finally {
@@ -122,13 +140,311 @@ export default function Perfil({ navigation, route }: Props) {
     };
   }, [id_artista]);
 
+  // ESCOLHER E ENVIAR FOTO DE CAPA
+  async function selecionarFotoCapa(origem: "galeria" | "camera") {
+    try {
+      let resultado: ImagePicker.ImagePickerResult;
+
+      if (origem === "galeria") {
+        const permissao =
+          await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+        if (!permissao.granted) {
+          Alert.alert(
+            "Permissão necessária",
+            "Precisamos de acesso à galeria para escolher uma foto.",
+          );
+          return;
+        }
+
+        resultado = await ImagePicker.launchImageLibraryAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [16, 9],
+          quality: 0.8,
+        });
+      } else {
+        const permissao = await ImagePicker.requestCameraPermissionsAsync();
+
+        if (!permissao.granted) {
+          Alert.alert(
+            "Permissão necessária",
+            "Precisamos de acesso à câmera para tirar uma foto.",
+          );
+          return;
+        }
+
+        resultado = await ImagePicker.launchCameraAsync({
+          mediaTypes: ["images"],
+          allowsEditing: true,
+          aspect: [16, 9],
+          quality: 0.8,
+        });
+      }
+
+      if (resultado.canceled || !resultado.assets.length) {
+        return;
+      }
+
+      const foto = resultado.assets[0];
+
+      const extensao = foto.uri.split(".").pop()?.toLowerCase();
+
+      const tipo =
+        foto.mimeType || (extensao === "png" ? "image/png" : "image/jpeg");
+
+      if (!["image/png", "image/jpeg"].includes(tipo)) {
+        Alert.alert("Formato inválido", "Escolha uma imagem PNG ou JPEG.");
+        return;
+      }
+
+      const formulario = new FormData();
+
+      const arquivo = new File(foto.uri);
+
+      formulario.append(
+        "image",
+        arquivo,
+        foto.fileName || `capa.${extensao === "png" ? "png" : "jpg"}`,
+      );
+
+      setEnviandoCapa(true);
+
+      const resposta = await apiPutFormData<{
+        message: string;
+        foto: string;
+      }>("/artistas/fotoCapa", formulario);
+
+      setArtista((atual) =>
+        atual
+          ? {
+              ...atual,
+              url_foto_capa: resposta.foto,
+            }
+          : atual,
+      );
+
+      Alert.alert("Sucesso", "Foto de capa atualizada!");
+    } catch (error) {
+      Alert.alert(
+        "Erro",
+        error instanceof Error
+          ? error.message
+          : "Não foi possível atualizar a foto de capa.",
+      );
+    } finally {
+      setEnviandoCapa(false);
+    }
+  }
+
+  // ESCOLHER E ENVIAR FOTO DE PERFIL
+async function selecionarFotoPerfil(origem: "galeria" | "camera") {
+  try {
+    let resultado: ImagePicker.ImagePickerResult;
+
+    if (origem === "galeria") {
+      const permissao =
+        await ImagePicker.requestMediaLibraryPermissionsAsync();
+
+      if (!permissao.granted) {
+        Alert.alert(
+          "Permissão necessária",
+          "Precisamos de acesso à galeria para escolher uma foto.",
+        );
+        return;
+      }
+
+      resultado = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+    } else {
+      const permissao = await ImagePicker.requestCameraPermissionsAsync();
+
+      if (!permissao.granted) {
+        Alert.alert(
+          "Permissão necessária",
+          "Precisamos de acesso à câmera para tirar uma foto.",
+        );
+        return;
+      }
+
+      resultado = await ImagePicker.launchCameraAsync({
+        mediaTypes: ["images"],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+    }
+
+    if (resultado.canceled || !resultado.assets.length) {
+      return;
+    }
+
+    const foto = resultado.assets[0];
+    const extensao = foto.uri.split(".").pop()?.toLowerCase();
+
+    const tipo =
+      foto.mimeType || (extensao === "png" ? "image/png" : "image/jpeg");
+
+    if (!["image/png", "image/jpeg"].includes(tipo)) {
+      Alert.alert("Formato inválido", "Escolha uma imagem PNG ou JPEG.");
+      return;
+    }
+
+    const formulario = new FormData();
+    const arquivo = new File(foto.uri);
+
+    formulario.append(
+      "image",
+      arquivo,
+      foto.fileName || `perfil.${extensao === "png" ? "png" : "jpg"}`,
+    );
+
+    setEnviandoFotoPerfil(true);
+
+    const resposta = await apiPutFormData<{
+      message: string;
+      foto: string;
+    }>("/usuarios/fotoPerfil", formulario);
+
+    setDadosUsuario((atual) =>
+      atual
+        ? {
+            ...atual,
+            url_foto_perfil: resposta.foto,
+          }
+        : atual,
+    );
+
+    Alert.alert("Sucesso", "Foto de perfil atualizada!");
+  } catch (error) {
+    Alert.alert(
+      "Erro",
+      error instanceof Error
+        ? error.message
+        : "Não foi possível atualizar a foto de perfil.",
+    );
+  } finally {
+    setEnviandoFotoPerfil(false);
+  }
+}
+
+  // ABRIR OPÇÕES DO LÁPIS
+  function abrirOpcoesFotoCapa() {
+    Alert.alert("Foto de capa", "Como deseja escolher sua foto?", [
+      {
+        text: "Escolher da galeria",
+        onPress: () => selecionarFotoCapa("galeria"),
+      },
+      {
+        text: "Tirar uma foto",
+        onPress: () => selecionarFotoCapa("camera"),
+      },
+      {
+        text: "Cancelar",
+        style: "cancel",
+      },
+    ]);
+  }
+
+  function abrirOpcoesFotoPerfil() {
+  Alert.alert("Foto de perfil", "Como deseja escolher sua foto?", [
+    {
+      text: "Escolher da galeria",
+      onPress: () => selecionarFotoPerfil("galeria"),
+    },
+    {
+      text: "Tirar uma foto",
+      onPress: () => selecionarFotoPerfil("camera"),
+    },
+    {
+      text: "Cancelar",
+      style: "cancel",
+    },
+  ]);
+}
+
+function abrirEdicaoPerfil() {
+  if (!dadosUsuario || !artista) return;
+
+  setNomeEditado(dadosUsuario.nome);
+  setEmailEditado(dadosUsuario.email);
+  setUsernameEditado(dadosUsuario.username || "");
+
+  setBiografiaEditada(artista.biografia || "");
+  setContatoEditado(artista.contato_profissional || "");
+
+  setModalEdicao(true);
+}
+
+
+
+async function salvarEdicaoPerfil() {
+  if (!dadosUsuario || !artista) return;
+
+  if (
+    !nomeEditado.trim() ||
+    !emailEditado.trim() ||
+    !usernameEditado.trim()
+  ) {
+    Alert.alert("Atenção", "Preencha nome, e-mail e username.");
+    return;
+  }
+
+  try {
+    setSalvandoEdicao(true);
+
+    console.log("ANTES:", {
+      fotoPerfil: dadosUsuario.url_foto_perfil,
+      fotoCapa: artista.url_foto_capa,
+    });
+
+    console.log("ATUALIZANDO USUÁRIO...");
+
+    await apiPut("/usuarios/" + dadosUsuario.id_usuario, {
+      nome: nomeEditado.trim(),
+      email: emailEditado.trim().toLowerCase(),
+      username: usernameEditado.trim(),
+    });
+
+    console.log("USUÁRIO ATUALIZADO!");
+
+    console.log("ATUALIZANDO ARTISTA...");
+
+    await apiPut("/artistas/" + artista.id_artista, {
+      biografia: biografiaEditada.trim() || null,
+      contato_profissional: contatoEditado.trim() || null,
+    });
+
+    console.log("ARTISTA ATUALIZADO!");
+
+    Alert.alert("Sucesso", "Perfil atualizado!");
+    setModalEdicao(false);
+
+  } catch (error) {
+    console.log("ERRO AO SALVAR:", error);
+
+    Alert.alert(
+      "Erro",
+      error instanceof Error
+        ? error.message
+        : "Não foi possível atualizar o perfil."
+    );
+  } finally {
+    setSalvandoEdicao(false);
+  }
+}
+
+
+
   if (carregando) {
     return (
       <View style={styles.centralizado}>
         <ActivityIndicator size="large" color="#ff7a00" />
-        <Text style={styles.textoAuxiliar}>
-          Carregando perfil...
-        </Text>
+        <Text style={styles.textoAuxiliar}>Carregando perfil...</Text>
       </View>
     );
   }
@@ -137,7 +453,7 @@ export default function Perfil({ navigation, route }: Props) {
     return (
       <View style={styles.centralizado}>
         <Text style={styles.erro}>
-          {erro || 'Não foi possível encontrar este artista.'}
+          {erro || "Não foi possível encontrar este artista."}
         </Text>
 
         <Pressable onPress={() => navigation.goBack()}>
@@ -151,7 +467,7 @@ export default function Perfil({ navigation, route }: Props) {
   const imagemPerfil = montarImagem(dadosUsuario.url_foto_perfil);
 
   const nomeExibido =
-    dadosUsuario.nome?.trim() || dadosUsuario.username || 'Artista';
+    dadosUsuario.nome?.trim() || dadosUsuario.username || "Artista";
 
   return (
     <View style={styles.tela}>
@@ -166,45 +482,56 @@ export default function Perfil({ navigation, route }: Props) {
           source={
             imagemCapa
               ? { uri: imagemCapa }
-              : require('../../assets/fundoPerfil.jpg')
+              : require("../../assets/fundoPerfil.jpg")
           }
           resizeMode="cover"
-          style={[
-            styles.banner,
-            { paddingTop: insets.top + 8 },
-          ]}
+          style={[styles.banner, { paddingTop: insets.top + 8 }]}
         >
           <View style={styles.bannerTopo}>
-            <Pressable
-              onPress={() => navigation.goBack()}
-              hitSlop={12}
-            >
+            <Pressable onPress={() => navigation.goBack()} hitSlop={12}>
               <Ionicons name="close" size={28} color="#fff" />
             </Pressable>
 
             {ehDono && (
               <Pressable
-                onPress={() => {
-                  // A tela de edição será conectada aqui.
-                }}
+                onPress={abrirEdicaoPerfil}
+                disabled={enviandoCapa}
                 hitSlop={12}
               >
-                <Ionicons name="pencil" size={23} color="#fff" />
+                {enviandoCapa ? (
+                  <ActivityIndicator color="#fff" />
+                ) : (
+                  <Ionicons name="pencil" size={23} color="#fff" />
+                )}
               </Pressable>
             )}
           </View>
 
           <View style={styles.bannerInfo}>
-            {imagemPerfil ? (
-              <Image
-                source={{ uri: imagemPerfil }}
-                style={styles.avatar}
-              />
-            ) : (
-              <View style={styles.avatarVazio}>
-                <Ionicons name="person" size={42} color="#fff" />
-              </View>
-            )}
+<View style={styles.avatarContainer}>
+  {imagemPerfil ? (
+    <Image source={{ uri: imagemPerfil }} style={styles.avatar} />
+  ) : (
+    <View style={styles.avatarVazio}>
+      <Ionicons name="person" size={42} color="#fff" />
+    </View>
+  )}
+
+  {ehDono && (
+    <Pressable
+      style={styles.botaoEditarAvatar}
+      onPress={abrirOpcoesFotoPerfil}
+      disabled={enviandoFotoPerfil}
+      hitSlop={8}
+    >
+      {enviandoFotoPerfil ? (
+        <ActivityIndicator size="small" color="#fff" />
+      ) : (
+        <Ionicons name="camera" size={16} color="#fff" />
+      )}
+    </Pressable>
+  )}
+</View>
 
             <View style={styles.dados}>
               <Text style={styles.nome} numberOfLines={2}>
@@ -220,7 +547,7 @@ export default function Perfil({ navigation, route }: Props) {
           {ehDono && (
             <Pressable
               style={styles.botaoMais}
-              onPress={() => navigation.navigate('Criar')}
+              onPress={() => navigation.navigate("Criar")}
             >
               <Ionicons name="add" size={26} color="#fff" />
             </Pressable>
@@ -228,24 +555,46 @@ export default function Perfil({ navigation, route }: Props) {
         </ImageBackground>
 
         {/* BIOGRAFIA */}
-        {!!artista.biografia && (
-          <View style={styles.bioContainer}>
-            <Text style={styles.bio}>
-              {artista.biografia}
-            </Text>
-          </View>
-        )}
+{/* BIOGRAFIA E CONTATO */}
+{(!!artista.biografia || !!artista.contato_profissional) && (
+  <View style={styles.bioContainer}>
+    {!!artista.biografia && (
+      <Text style={styles.bio}>
+        {artista.biografia}
+      </Text>
+    )}
+
+    {!!artista.contato_profissional && (
+      <Pressable
+        onPress={() => {
+          let link = artista.contato_profissional!.trim();
+
+          if (!/^https?:\/\//i.test(link)) {
+            link = `https://${link}`;
+          }
+
+          Linking.openURL(link).catch(() =>
+            Alert.alert("Erro", "Não foi possível abrir o link.")
+          );
+        }}
+        style={styles.contatoContainer}
+      >
+        <Ionicons name="link-outline" size={17} color="#ff7a00" />
+
+        <Text style={styles.contato}>
+          {artista.contato_profissional}
+        </Text>
+      </Pressable>
+    )}
+  </View>
+)}
 
         {/* PAINEL DE CONTEÚDO */}
         <View style={styles.painel}>
-          <Abas
-            opcoes={OPCOES}
-            atual={aba}
-            onChange={setAba}
-          />
+          <Abas opcoes={OPCOES} atual={aba} onChange={setAba} />
 
           <View style={styles.conteudo}>
-            {aba === 'posts' ? (
+            {aba === "posts" ? (
               <Posts
                 idArtista={id_artista}
                 nomeArtista={nomeExibido}
@@ -262,6 +611,125 @@ export default function Perfil({ navigation, route }: Props) {
           </View>
         </View>
       </ScrollView>
+
+<Modal
+  visible={modalEdicao}
+  transparent
+  animationType="fade"
+  onRequestClose={() => setModalEdicao(false)}
+>
+  <View style={styles.fundoModal}>
+    <View style={styles.conteudoModal}>
+      <View style={styles.topoModal}>
+        <Text style={styles.tituloModal}>Editar perfil</Text>
+
+        <Pressable onPress={() => setModalEdicao(false)}>
+          <Ionicons name="close" size={26} color="#fff" />
+        </Pressable>
+      </View>
+
+      <ScrollView showsVerticalScrollIndicator={false}>
+        <Text style={styles.labelModal}>Nome</Text>
+        <TextInput
+          style={styles.inputModal}
+          value={nomeEditado}
+          onChangeText={setNomeEditado}
+          placeholder="Seu nome"
+          placeholderTextColor="#888"
+          maxLength={100}
+        />
+
+        <Text style={styles.labelModal}>E-mail</Text>
+        <TextInput
+          style={styles.inputModal}
+          value={emailEditado}
+          onChangeText={setEmailEditado}
+          placeholder="Seu e-mail"
+          placeholderTextColor="#888"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          maxLength={254}
+        />
+
+        <Text style={styles.labelModal}>Username</Text>
+        <TextInput
+          style={styles.inputModal}
+          value={usernameEditado}
+          onChangeText={setUsernameEditado}
+          placeholder="Seu username"
+          placeholderTextColor="#888"
+          autoCapitalize="none"
+          maxLength={30}
+        />
+
+        <Text style={styles.labelModal}>Biografia</Text>
+
+<TextInput
+  style={[styles.inputModal, styles.inputBiografia]}
+  value={biografiaEditada}
+  onChangeText={setBiografiaEditada}
+  placeholder="Conte um pouco sobre você e seu trabalho..."
+  placeholderTextColor="#888"
+  multiline
+  maxLength={1000}
+  textAlignVertical="top"
+/>
+
+<Text style={styles.labelModal}>Contato profissional</Text>
+
+<TextInput
+  style={styles.inputModal}
+  value={contatoEditado}
+  onChangeText={setContatoEditado}
+  placeholder="Instagram, WhatsApp, portfólio..."
+  placeholderTextColor="#888"
+  autoCapitalize="none"
+  keyboardType="url"
+  maxLength={255}
+/>
+
+        <Text style={styles.labelModal}>Fotos</Text>
+
+        <Pressable
+          style={styles.botaoFotoModal}
+          onPress={abrirOpcoesFotoPerfil}
+          disabled={enviandoFotoPerfil}
+        >
+          <Ionicons name="person-circle-outline" size={21} color="#fff" />
+          <Text style={styles.textoBotaoFoto}>
+            Alterar foto de perfil
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.botaoFotoModal}
+          onPress={() => abrirOpcoesFotoCapa()}
+          disabled={enviandoCapa}
+        >
+          <Ionicons name="image-outline" size={21} color="#fff" />
+          <Text style={styles.textoBotaoFoto}>
+            Alterar foto de capa
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.botaoSalvar}
+          onPress={salvarEdicaoPerfil}
+          disabled={salvandoEdicao}
+        >
+          {salvandoEdicao ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.textoBotaoSalvar}>
+              Salvar alterações
+            </Text>
+          )}
+        </Pressable>
+      </ScrollView>
+    </View>
+  </View>
+</Modal>
+
     </View>
   );
 }
@@ -269,29 +737,142 @@ export default function Perfil({ navigation, route }: Props) {
 const styles = StyleSheet.create({
   tela: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: "#000",
   },
+
+  inputBiografia: {
+  minHeight: 110,
+  paddingTop: 12,
+},
+
+contatoContainer: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 7,
+  marginTop: 12,
+},
+
+contato: {
+  color: "#ff7a00",
+  fontSize: 13,
+  textDecorationLine: "underline",
+  flexShrink: 1,
+},
+
+  fundoModal: {
+  flex: 1,
+  backgroundColor: "rgba(0,0,0,0.75)",
+  justifyContent: "center",
+  padding: 20,
+},
+
+conteudoModal: {
+  backgroundColor: "#1f1f1f",
+  borderRadius: 24,
+  padding: 22,
+  maxHeight: "85%",
+},
+
+topoModal: {
+  flexDirection: "row",
+  alignItems: "center",
+  justifyContent: "space-between",
+  marginBottom: 24,
+},
+
+tituloModal: {
+  color: "#fff",
+  fontSize: 22,
+  fontWeight: "800",
+},
+
+labelModal: {
+  color: "#ddd",
+  fontSize: 14,
+  fontWeight: "700",
+  marginBottom: 8,
+  marginTop: 14,
+},
+
+inputModal: {
+  backgroundColor: "#333",
+  color: "#fff",
+  borderRadius: 12,
+  paddingHorizontal: 14,
+  paddingVertical: 13,
+  fontSize: 15,
+},
+
+botaoFotoModal: {
+  flexDirection: "row",
+  alignItems: "center",
+  gap: 10,
+  backgroundColor: "#333",
+  padding: 14,
+  borderRadius: 12,
+  marginTop: 10,
+},
+
+textoBotaoFoto: {
+  color: "#fff",
+  fontSize: 14,
+},
+
+botaoSalvar: {
+  backgroundColor: "#ff7a00",
+  borderRadius: 14,
+  padding: 15,
+  alignItems: "center",
+  marginTop: 26,
+  marginBottom: 8,
+},
+
+textoBotaoSalvar: {
+  color: "#fff",
+  fontSize: 15,
+  fontWeight: "800",
+},
+
+  avatarContainer: {
+  width: 88,
+  height: 88,
+  position: "relative",
+},
+
+botaoEditarAvatar: {
+  position: "absolute",
+  right: 0,
+  bottom: 0,
+  width: 30,
+  height: 30,
+  borderRadius: 15,
+  backgroundColor: "#ff7a00",
+  alignItems: "center",
+  justifyContent: "center",
+  borderWidth: 2,
+  borderColor: "#fff",
+},
 
   centralizado: {
     flex: 1,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 24,
   },
 
   textoAuxiliar: {
-    color: '#aaa',
+    color: "#aaa",
     marginTop: 12,
   },
 
   erro: {
-    color: '#ff7777',
-    textAlign: 'center',
+    color: "#ff7777",
+    textAlign: "center",
   },
 
   voltar: {
-    color: '#ff7a00',
+    color: "#ff7a00",
     marginTop: 16,
   },
 
@@ -299,18 +880,18 @@ const styles = StyleSheet.create({
     minHeight: 220,
     paddingHorizontal: 16,
     paddingBottom: 24,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
 
   bannerTopo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 
   bannerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 14,
     marginTop: 24,
     paddingRight: 48,
@@ -320,20 +901,20 @@ const styles = StyleSheet.create({
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#555',
+    backgroundColor: "#555",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
   },
 
   avatarVazio: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#555',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#555",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
   },
 
   dados: {
@@ -341,37 +922,37 @@ const styles = StyleSheet.create({
   },
 
   nome: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   email: {
-    color: '#eee',
+    color: "#eee",
     fontSize: 12,
     marginTop: 4,
   },
 
   botaoMais: {
-    position: 'absolute',
+    position: "absolute",
     right: 16,
     bottom: 12,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#ff7a00',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#ff7a00",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   bioContainer: {
-    backgroundColor: '#000',
+    backgroundColor: "#000",
     paddingHorizontal: 16,
     paddingVertical: 14,
   },
 
   bio: {
-    color: '#bbb',
+    color: "#bbb",
     fontSize: 13,
     lineHeight: 19,
   },
@@ -379,12 +960,12 @@ const styles = StyleSheet.create({
   painel: {
     flex: 1,
     minHeight: 400,
-    backgroundColor: '#1f1f1f',
+    backgroundColor: "#1f1f1f",
     borderTopLeftRadius: 36,
     borderTopRightRadius: 36,
     paddingTop: 20,
     paddingHorizontal: 16,
-    overflow: 'hidden',
+    overflow: "hidden",
   },
 
   conteudo: {
