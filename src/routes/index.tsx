@@ -1,6 +1,9 @@
-
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, View } from 'react-native';
+
+import {
+  ActivityIndicator,
+  View,
+} from 'react-native';
 
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
@@ -8,6 +11,7 @@ import Login from '../screens/Login';
 import Cadastro from '../screens/Cadastro';
 import Home from '../screens/Home';
 import Perfil from '../screens/Perfil';
+import PerfilUsuario from '../screens/Perfil/PerfilUsuario';
 import Criar from '../screens/Criar';
 
 import type { RootStackParamList } from './types';
@@ -78,7 +82,10 @@ function Navegacao() {
           justifyContent: 'center',
         }}
       >
-        <ActivityIndicator size="large" color="#ff3d0a" />
+        <ActivityIndicator
+          size="large"
+          color="#ff3d0a"
+        />
       </View>
     );
   }
@@ -87,20 +94,53 @@ function Navegacao() {
     <Stack.Navigator
       screenOptions={{
         headerShown: false,
-        contentStyle: { backgroundColor: '#000' },
+        contentStyle: {
+          backgroundColor: '#000',
+        },
         animation: 'fade',
       }}
     >
       {!autenticado ? (
         <>
-          <Stack.Screen name="Login" component={Login} />
-          <Stack.Screen name="Cadastro" component={Cadastro} />
+          <Stack.Screen
+            name="Login"
+            component={Login}
+          />
+
+          <Stack.Screen
+            name="Cadastro"
+            component={Cadastro}
+          />
         </>
       ) : (
         <>
-          <Stack.Screen name="Home" component={Home} />
-          <Stack.Screen name="Perfil" component={Perfil} />
-          <Stack.Screen name="Criar" component={Criar} />
+          <Stack.Screen
+            name="Home"
+            component={Home}
+          />
+
+          <Stack.Screen
+            name="Perfil"
+            component={Perfil}
+          />
+
+          {/* PERFIL DO USUÁRIO NORMAL */}
+          <Stack.Screen name="PerfilUsuario">
+            {({ navigation }) => (
+              <PerfilUsuario
+                onAbrirPerfil={(id_artista) => {
+                  navigation.navigate('Perfil', {
+                    id_artista: id_artista,
+                  });
+                }}
+              />
+            )}
+          </Stack.Screen>
+
+          <Stack.Screen
+            name="Criar"
+            component={Criar}
+          />
         </>
       )}
     </Stack.Navigator>

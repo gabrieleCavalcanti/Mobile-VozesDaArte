@@ -2,6 +2,7 @@
 import { useState } from 'react';
 
 import {
+  Alert,
   Image,
   Modal,
   Pressable,
@@ -16,10 +17,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import type { RootStackParamList } from '../../routes/types';
 
-import { apiLogout } from '../../api/api';
+import { apiLogout, apiGet } from '../../api/api';
 import { useAuth } from '../../context/AuthContext';
-import { apiGet } from '../../api/api';
-
 
 import Abas from '../../components/Abas';
 import Posts from './Posts';
@@ -59,17 +58,48 @@ export default function Home({ navigation }: Props) {
 
   const ehArtista = usuario?.tipo === 'ARTISTA';
 
-  console.log('USUARIO NA HOME:', usuario);
-console.log('TIPO:', usuario?.tipo);
-console.log('EH ARTISTA:', ehArtista);
+  const nomeExibido = usuario?.username || 'Usuário';
 
   function abrirPerfilArtista(id_artista: number) {
-  navigation.navigate('Perfil', {
-    id_artista,
-  });
-}
+    navigation.navigate('Perfil', {
+      id_artista,
+    });
+  }
 
-const nomeExibido = usuario?.username || 'Usuário';
+  async function abrirPerfil() {
+    setMenuAberto(false);
+
+    if (!usuario?.id_usuario) {
+      Alert.alert('Erro', 'Não foi possível identificar o usuário.');
+      return;
+    }
+
+    // PERFIL DO USUÁRIO NORMAL
+    if (usuario.tipo === 'USUARIO') {
+      navigation.navigate('PerfilUsuario');
+      return;
+    }
+
+    // PERFIL DO ARTISTA
+    if (usuario.tipo === 'ARTISTA') {
+      try {
+        const artista = await apiGet<{ id_artista: number }>(
+          `/artistas/usuario/${usuario.id_usuario}`,
+        );
+
+        navigation.navigate('Perfil', {
+          id_artista: artista.id_artista,
+        });
+      } catch (error) {
+        console.log('Erro ao buscar perfil do artista:', error);
+
+        Alert.alert(
+          'Erro',
+          'Não foi possível abrir o perfil do artista.',
+        );
+      }
+    }
+  }
 
   async function sair() {
     setMenuAberto(false);
@@ -147,10 +177,10 @@ const nomeExibido = usuario?.username || 'Usuário';
         />
 
         {aba === 'posts' ? (
-  <Posts onAbrirPerfil={abrirPerfilArtista} />
-) : (
-  <Eventos onAbrirPerfil={abrirPerfilArtista} />
-)}
+          <Posts onAbrirPerfil={abrirPerfilArtista} />
+        ) : (
+          <Eventos onAbrirPerfil={abrirPerfilArtista} />
+        )}
       </View>
 
       {/* MENU LATERAL */}
@@ -191,27 +221,10 @@ const nomeExibido = usuario?.username || 'Usuário';
                 {nomeExibido}
               </Text>
 
+              {/* BOTÃO PERFIL */}
               <Pressable
                 style={styles.menuPerfil}
-onPress={async () => {
-  setMenuAberto(false);
-
-  if (!usuario?.id_usuario) {
-    return;
-  }
-
-  try {
-    const artista = await apiGet<{ id_artista: number }>(
-      `/artistas/usuario/${usuario.id_usuario}`,
-    );
-
-    navigation.navigate('Perfil', {
-      id_artista: artista.id_artista,
-    });
-  } catch (error) {
-    console.log('Erro ao buscar perfil do artista:', error);
-  }
-}}
+                onPress={abrirPerfil}
               >
                 <Text style={styles.menuPerfilTexto}>
                   PERFIL
@@ -219,6 +232,7 @@ onPress={async () => {
               </Pressable>
             </View>
 
+            {/* SAIR */}
             <Pressable
               style={styles.menuSair}
               onPress={sair}

@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+
+import { useEffect, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -13,32 +14,32 @@ import {
   Text,
   TextInput,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { Ionicons } from '@expo/vector-icons';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import * as ImagePicker from 'expo-image-picker';
+import { Ionicons } from "@expo/vector-icons";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import * as ImagePicker from "expo-image-picker";
 
-import type { NativeStackScreenProps } from '@react-navigation/native-stack';
-import type { RootStackParamList } from '../../routes/types';
+import type { NativeStackScreenProps } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../../routes/types";
 
-import { useAuth } from '../../context/AuthContext';
+import { useAuth } from "../../context/AuthContext";
 
 import BASE_URL, {
   apiGet,
   apiPut,
   apiPutFormData,
-} from '../../api/api';
+} from "../../api/api";
 
-import { File } from 'expo-file-system';
+import { File } from "expo-file-system";
 
-import Abas from '../../components/Abas';
-import Posts from '../Home/Posts';
-import Eventos from '../Home/Eventos';
+import Abas from "../../components/Abas";
+import Posts from "../Home/Posts";
+import Eventos from "../Home/Eventos";
 
 type Props = NativeStackScreenProps<
   RootStackParamList,
-  'Perfil'
+  "Perfil"
 >;
 
 type ArtistaAPI = {
@@ -57,19 +58,33 @@ type UsuarioAPI = {
   url_foto_perfil: string | null;
 };
 
-type Aba = 'eventos' | 'posts' | 'arquivados';
+type EnderecoAPI = {
+  id_endereco?: number;
+  cep: string;
+  rua: string;
+  complemento?: string | null;
+  uf: string;
+  estado: string;
+  cidade: string;
+  bairro: string;
+  numero: string;
+  latitude?: number | null;
+  longitude?: number | null;
+};
+
+type Aba = "eventos" | "posts" | "arquivados";
 
 const OPCOES_VISITANTE: {
   valor: Aba;
   rotulo: string;
 }[] = [
   {
-    valor: 'eventos',
-    rotulo: 'EVENTOS',
+    valor: "eventos",
+    rotulo: "EVENTOS",
   },
   {
-    valor: 'posts',
-    rotulo: 'POSTS',
+    valor: "posts",
+    rotulo: "POSTS",
   },
 ];
 
@@ -78,16 +93,16 @@ const OPCOES_DONO: {
   rotulo: string;
 }[] = [
   {
-    valor: 'eventos',
-    rotulo: 'EVENTOS',
+    valor: "eventos",
+    rotulo: "EVENTOS",
   },
   {
-    valor: 'posts',
-    rotulo: 'POSTS',
+    valor: "posts",
+    rotulo: "POSTS",
   },
   {
-    valor: 'arquivados',
-    rotulo: 'ARQUIVADOS',
+    valor: "arquivados",
+    rotulo: "ARQUIVADOS",
   },
 ];
 
@@ -96,7 +111,7 @@ function montarImagem(
 ): string | undefined {
   if (!nomeArquivo) return undefined;
 
-  if (nomeArquivo.startsWith('http')) {
+  if (nomeArquivo.startsWith("http")) {
     return nomeArquivo;
   }
 
@@ -112,75 +127,52 @@ export default function Perfil({
 
   const { id_artista } = route.params;
 
-  const [artista, setArtista] =
-    useState<ArtistaAPI | null>(null);
+  const [artista, setArtista] = useState<ArtistaAPI | null>(null);
+  const [dadosUsuario, setDadosUsuario] = useState<UsuarioAPI | null>(null);
 
-  const [dadosUsuario, setDadosUsuario] =
-    useState<UsuarioAPI | null>(null);
+  const [endereco, setEndereco] = useState<EnderecoAPI | null>(null);
+  const [carregandoEndereco, setCarregandoEndereco] = useState(false);
 
-  const [aba, setAba] = useState<Aba>('posts');
+  const [aba, setAba] = useState<Aba>("posts");
 
-  const [carregando, setCarregando] =
-    useState(true);
+  const [carregando, setCarregando] = useState(true);
+  const [erro, setErro] = useState("");
 
-  const [erro, setErro] = useState('');
+  const [enviandoCapa, setEnviandoCapa] = useState(false);
+  const [enviandoFotoPerfil, setEnviandoFotoPerfil] = useState(false);
 
-  const [enviandoCapa, setEnviandoCapa] =
-    useState(false);
+  const [modalEdicao, setModalEdicao] = useState(false);
 
-  const [enviandoFotoPerfil, setEnviandoFotoPerfil] =
-    useState(false);
+  const [biografiaEditada, setBiografiaEditada] = useState("");
+  const [contatoEditado, setContatoEditado] = useState("");
 
-  const [modalEdicao, setModalEdicao] =
-    useState(false);
+  const [salvandoEdicao, setSalvandoEdicao] = useState(false);
 
-  const [biografiaEditada, setBiografiaEditada] =
-    useState('');
-
-  const [contatoEditado, setContatoEditado] =
-    useState('');
-
-  const [salvandoEdicao, setSalvandoEdicao] =
-    useState(false);
-
-  const [nomeEditado, setNomeEditado] =
-    useState('');
-
-  const [emailEditado, setEmailEditado] =
-    useState('');
-
-  const [usernameEditado, setUsernameEditado] =
-    useState('');
+  const [nomeEditado, setNomeEditado] = useState("");
+  const [emailEditado, setEmailEditado] = useState("");
+  const [usernameEditado, setUsernameEditado] = useState("");
 
   const ehDono =
     !!artista &&
     !!usuario?.id_usuario &&
     artista.id_usuario === usuario.id_usuario;
 
-  // OPÇÕES DE ABAS
   const opcoesAbas = ehDono
     ? OPCOES_DONO
     : OPCOES_VISITANTE;
 
-  // Se o dono sair do perfil e outro usuário
-  // estiver visualizando, não manter Arquivados.
-  useEffect(() => {
-    if (!ehDono && aba === 'arquivados') {
-      setAba('posts');
-    }
-  }, [ehDono, aba]);
-
-  // CARREGAR PERFIL
+  // CARREGAR PERFIL E ENDEREÇO
   useEffect(() => {
     let ativo = true;
 
     async function carregarPerfil() {
       try {
         setCarregando(true);
-        setErro('');
+        setErro("");
 
         setArtista(null);
         setDadosUsuario(null);
+        setEndereco(null);
 
         const dadosArtista =
           await apiGet<ArtistaAPI>(
@@ -192,16 +184,54 @@ export default function Perfil({
             `/usuarios/${dadosArtista.id_usuario}`,
           );
 
-        if (ativo) {
-          setArtista(dadosArtista);
-          setDadosUsuario(dadosUsuario);
+        if (!ativo) return;
+
+        setArtista(dadosArtista);
+        setDadosUsuario(dadosUsuario);
+
+        // BUSCAR ENDEREÇO DO ARTISTA
+        try {
+          setCarregandoEndereco(true);
+
+          const resposta =
+            await apiGet<
+              | EnderecoAPI
+              | {
+                  mensagem?: string;
+                  endereco: EnderecoAPI | null;
+                }
+            >(
+              `/enderecos/usuario/${dadosArtista.id_usuario}`,
+            );
+
+          const enderecoEncontrado =
+            "endereco" in resposta
+              ? resposta.endereco
+              : resposta;
+
+          if (ativo) {
+            setEndereco(enderecoEncontrado || null);
+          }
+        } catch (error) {
+          console.log(
+            "Não foi possível carregar o endereço:",
+            error,
+          );
+
+          if (ativo) {
+            setEndereco(null);
+          }
+        } finally {
+          if (ativo) {
+            setCarregandoEndereco(false);
+          }
         }
       } catch (error) {
         if (ativo) {
           setErro(
             error instanceof Error
               ? error.message
-              : 'Não foi possível carregar o perfil.',
+              : "Não foi possível carregar o perfil.",
           );
         }
       } finally {
@@ -218,28 +248,78 @@ export default function Perfil({
     };
   }, [id_artista]);
 
+  // ABRIR LOCALIZAÇÃO NO MAPS
+  async function abrirLocalizacao() {
+    if (!endereco) return;
+
+    const latitude = Number(endereco.latitude);
+    const longitude = Number(endereco.longitude);
+
+    let destino = "";
+
+    if (
+      endereco.latitude != null &&
+      endereco.longitude != null &&
+      !isNaN(latitude) &&
+      !isNaN(longitude)
+    ) {
+      destino = `${latitude},${longitude}`;
+    } else {
+      destino = [
+        endereco.rua,
+        endereco.numero,
+        endereco.bairro,
+        endereco.cidade,
+        endereco.uf || endereco.estado,
+        endereco.cep,
+      ]
+        .filter(Boolean)
+        .join(", ");
+    }
+
+    if (!destino.trim()) {
+      Alert.alert(
+        "Localização indisponível",
+        "Este endereço ainda não possui uma localização válida.",
+      );
+      return;
+    }
+
+    const url =
+      `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(destino)}`;
+
+    try {
+      await Linking.openURL(url);
+    } catch {
+      Alert.alert(
+        "Erro",
+        "Não foi possível abrir o mapa.",
+      );
+    }
+  }
+
   // ESCOLHER E ENVIAR FOTO DE CAPA
   async function selecionarFotoCapa(
-    origem: 'galeria' | 'camera',
+    origem: "galeria" | "camera",
   ) {
     try {
       let resultado: ImagePicker.ImagePickerResult;
 
-      if (origem === 'galeria') {
+      if (origem === "galeria") {
         const permissao =
           await ImagePicker.requestMediaLibraryPermissionsAsync();
 
         if (!permissao.granted) {
           Alert.alert(
-            'Permissão necessária',
-            'Precisamos de acesso à galeria para escolher uma foto.',
+            "Permissão necessária",
+            "Precisamos de acesso à galeria para escolher uma foto.",
           );
           return;
         }
 
         resultado =
           await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
+            mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [16, 9],
             quality: 0.8,
@@ -250,15 +330,15 @@ export default function Perfil({
 
         if (!permissao.granted) {
           Alert.alert(
-            'Permissão necessária',
-            'Precisamos de acesso à câmera para tirar uma foto.',
+            "Permissão necessária",
+            "Precisamos de acesso à câmera para tirar uma foto.",
           );
           return;
         }
 
         resultado =
           await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
+            mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [16, 9],
             quality: 0.8,
@@ -274,23 +354,21 @@ export default function Perfil({
 
       const foto = resultado.assets[0];
 
-      const extensao = foto.uri
-        .split('.')
-        .pop()
-        ?.toLowerCase();
+      const extensao =
+        foto.uri.split(".").pop()?.toLowerCase();
 
       const tipo =
         foto.mimeType ||
-        (extensao === 'png'
-          ? 'image/png'
-          : 'image/jpeg');
+        (extensao === "png"
+          ? "image/png"
+          : "image/jpeg");
 
       if (
-        !['image/png', 'image/jpeg'].includes(tipo)
+        !["image/png", "image/jpeg"].includes(tipo)
       ) {
         Alert.alert(
-          'Formato inválido',
-          'Escolha uma imagem PNG ou JPEG.',
+          "Formato inválido",
+          "Escolha uma imagem PNG ou JPEG.",
         );
         return;
       }
@@ -299,10 +377,10 @@ export default function Perfil({
       const arquivo = new File(foto.uri);
 
       formulario.append(
-        'image',
+        "image",
         arquivo,
         foto.fileName ||
-          `capa.${extensao === 'png' ? 'png' : 'jpg'}`,
+          `capa.${extensao === "png" ? "png" : "jpg"}`,
       );
 
       setEnviandoCapa(true);
@@ -311,7 +389,7 @@ export default function Perfil({
         await apiPutFormData<{
           message: string;
           foto: string;
-        }>('/artistas/fotoCapa', formulario);
+        }>("/artistas/fotoCapa", formulario);
 
       setArtista((atual) =>
         atual
@@ -323,15 +401,15 @@ export default function Perfil({
       );
 
       Alert.alert(
-        'Sucesso',
-        'Foto de capa atualizada!',
+        "Sucesso",
+        "Foto de capa atualizada!",
       );
     } catch (error) {
       Alert.alert(
-        'Erro',
+        "Erro",
         error instanceof Error
           ? error.message
-          : 'Não foi possível atualizar a foto de capa.',
+          : "Não foi possível atualizar a foto de capa.",
       );
     } finally {
       setEnviandoCapa(false);
@@ -340,26 +418,26 @@ export default function Perfil({
 
   // ESCOLHER E ENVIAR FOTO DE PERFIL
   async function selecionarFotoPerfil(
-    origem: 'galeria' | 'camera',
+    origem: "galeria" | "camera",
   ) {
     try {
       let resultado: ImagePicker.ImagePickerResult;
 
-      if (origem === 'galeria') {
+      if (origem === "galeria") {
         const permissao =
           await ImagePicker.requestMediaLibraryPermissionsAsync();
 
         if (!permissao.granted) {
           Alert.alert(
-            'Permissão necessária',
-            'Precisamos de acesso à galeria para escolher uma foto.',
+            "Permissão necessária",
+            "Precisamos de acesso à galeria para escolher uma foto.",
           );
           return;
         }
 
         resultado =
           await ImagePicker.launchImageLibraryAsync({
-            mediaTypes: ['images'],
+            mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
@@ -370,15 +448,15 @@ export default function Perfil({
 
         if (!permissao.granted) {
           Alert.alert(
-            'Permissão necessária',
-            'Precisamos de acesso à câmera para tirar uma foto.',
+            "Permissão necessária",
+            "Precisamos de acesso à câmera para tirar uma foto.",
           );
           return;
         }
 
         resultado =
           await ImagePicker.launchCameraAsync({
-            mediaTypes: ['images'],
+            mediaTypes: ["images"],
             allowsEditing: true,
             aspect: [1, 1],
             quality: 0.8,
@@ -394,23 +472,21 @@ export default function Perfil({
 
       const foto = resultado.assets[0];
 
-      const extensao = foto.uri
-        .split('.')
-        .pop()
-        ?.toLowerCase();
+      const extensao =
+        foto.uri.split(".").pop()?.toLowerCase();
 
       const tipo =
         foto.mimeType ||
-        (extensao === 'png'
-          ? 'image/png'
-          : 'image/jpeg');
+        (extensao === "png"
+          ? "image/png"
+          : "image/jpeg");
 
       if (
-        !['image/png', 'image/jpeg'].includes(tipo)
+        !["image/png", "image/jpeg"].includes(tipo)
       ) {
         Alert.alert(
-          'Formato inválido',
-          'Escolha uma imagem PNG ou JPEG.',
+          "Formato inválido",
+          "Escolha uma imagem PNG ou JPEG.",
         );
         return;
       }
@@ -419,10 +495,10 @@ export default function Perfil({
       const arquivo = new File(foto.uri);
 
       formulario.append(
-        'image',
+        "image",
         arquivo,
         foto.fileName ||
-          `perfil.${extensao === 'png' ? 'png' : 'jpg'}`,
+          `perfil.${extensao === "png" ? "png" : "jpg"}`,
       );
 
       setEnviandoFotoPerfil(true);
@@ -431,7 +507,7 @@ export default function Perfil({
         await apiPutFormData<{
           message: string;
           foto: string;
-        }>('/usuarios/fotoPerfil', formulario);
+        }>("/usuarios/fotoPerfil", formulario);
 
       setDadosUsuario((atual) =>
         atual
@@ -443,15 +519,15 @@ export default function Perfil({
       );
 
       Alert.alert(
-        'Sucesso',
-        'Foto de perfil atualizada!',
+        "Sucesso",
+        "Foto de perfil atualizada!",
       );
     } catch (error) {
       Alert.alert(
-        'Erro',
+        "Erro",
         error instanceof Error
           ? error.message
-          : 'Não foi possível atualizar a foto de perfil.',
+          : "Não foi possível atualizar a foto de perfil.",
       );
     } finally {
       setEnviandoFotoPerfil(false);
@@ -461,22 +537,22 @@ export default function Perfil({
   // OPÇÕES DA FOTO DE CAPA
   function abrirOpcoesFotoCapa() {
     Alert.alert(
-      'Foto de capa',
-      'Como deseja escolher sua foto?',
+      "Foto de capa",
+      "Como deseja escolher sua foto?",
       [
         {
-          text: 'Escolher da galeria',
+          text: "Escolher da galeria",
           onPress: () =>
-            selecionarFotoCapa('galeria'),
+            selecionarFotoCapa("galeria"),
         },
         {
-          text: 'Tirar uma foto',
+          text: "Tirar uma foto",
           onPress: () =>
-            selecionarFotoCapa('camera'),
+            selecionarFotoCapa("camera"),
         },
         {
-          text: 'Cancelar',
-          style: 'cancel',
+          text: "Cancelar",
+          style: "cancel",
         },
       ],
     );
@@ -485,22 +561,22 @@ export default function Perfil({
   // OPÇÕES DA FOTO DE PERFIL
   function abrirOpcoesFotoPerfil() {
     Alert.alert(
-      'Foto de perfil',
-      'Como deseja escolher sua foto?',
+      "Foto de perfil",
+      "Como deseja escolher sua foto?",
       [
         {
-          text: 'Escolher da galeria',
+          text: "Escolher da galeria",
           onPress: () =>
-            selecionarFotoPerfil('galeria'),
+            selecionarFotoPerfil("galeria"),
         },
         {
-          text: 'Tirar uma foto',
+          text: "Tirar uma foto",
           onPress: () =>
-            selecionarFotoPerfil('camera'),
+            selecionarFotoPerfil("camera"),
         },
         {
-          text: 'Cancelar',
-          style: 'cancel',
+          text: "Cancelar",
+          style: "cancel",
         },
       ],
     );
@@ -512,16 +588,11 @@ export default function Perfil({
 
     setNomeEditado(dadosUsuario.nome);
     setEmailEditado(dadosUsuario.email);
-    setUsernameEditado(
-      dadosUsuario.username || '',
-    );
+    setUsernameEditado(dadosUsuario.username || "");
 
-    setBiografiaEditada(
-      artista.biografia || '',
-    );
-
+    setBiografiaEditada(artista.biografia || "");
     setContatoEditado(
-      artista.contato_profissional || '',
+      artista.contato_profissional || "",
     );
 
     setModalEdicao(true);
@@ -537,8 +608,8 @@ export default function Perfil({
       !usernameEditado.trim()
     ) {
       Alert.alert(
-        'Atenção',
-        'Preencha nome, e-mail e username.',
+        "Atenção",
+        "Preencha nome, e-mail e username.",
       );
       return;
     }
@@ -547,18 +618,16 @@ export default function Perfil({
       setSalvandoEdicao(true);
 
       await apiPut(
-        `/usuarios/${dadosUsuario.id_usuario}`,
+        "/usuarios/" + dadosUsuario.id_usuario,
         {
           nome: nomeEditado.trim(),
-          email: emailEditado
-            .trim()
-            .toLowerCase(),
+          email: emailEditado.trim().toLowerCase(),
           username: usernameEditado.trim(),
         },
       );
 
       await apiPut(
-        `/artistas/${artista.id_artista}`,
+        "/artistas/" + artista.id_artista,
         {
           biografia:
             biografiaEditada.trim() || null,
@@ -567,14 +636,13 @@ export default function Perfil({
         },
       );
 
+      // ATUALIZAR OS DADOS NA TELA
       setDadosUsuario((atual) =>
         atual
           ? {
               ...atual,
               nome: nomeEditado.trim(),
-              email: emailEditado
-                .trim()
-                .toLowerCase(),
+              email: emailEditado.trim().toLowerCase(),
               username: usernameEditado.trim(),
             }
           : atual,
@@ -593,17 +661,19 @@ export default function Perfil({
       );
 
       Alert.alert(
-        'Sucesso',
-        'Perfil atualizado!',
+        "Sucesso",
+        "Perfil atualizado!",
       );
 
       setModalEdicao(false);
     } catch (error) {
+      console.log("ERRO AO SALVAR:", error);
+
       Alert.alert(
-        'Erro',
+        "Erro",
         error instanceof Error
           ? error.message
-          : 'Não foi possível atualizar o perfil.',
+          : "Não foi possível atualizar o perfil.",
       );
     } finally {
       setSalvandoEdicao(false);
@@ -632,7 +702,7 @@ export default function Perfil({
       <View style={styles.centralizado}>
         <Text style={styles.erro}>
           {erro ||
-            'Não foi possível encontrar este artista.'}
+            "Não foi possível encontrar este artista."}
         </Text>
 
         <Pressable
@@ -657,9 +727,24 @@ export default function Perfil({
   const nomeExibido =
     dadosUsuario.nome?.trim() ||
     dadosUsuario.username ||
-    'Artista';
+    "Artista";
 
-  // TELA DO PERFIL
+  // FORMATAÇÃO DO ENDEREÇO
+  const enderecoFormatado = endereco
+    ? [
+        endereco.rua
+          ? `${endereco.rua}${endereco.numero ? `, ${endereco.numero}` : ""}`
+          : endereco.numero,
+        endereco.complemento,
+        endereco.bairro,
+        endereco.cidade,
+        endereco.uf || endereco.estado,
+        endereco.cep ? `CEP: ${endereco.cep}` : null,
+      ]
+        .filter(Boolean)
+        .join("\n")
+    : "";
+
   return (
     <View style={styles.tela}>
       <ScrollView
@@ -673,7 +758,7 @@ export default function Perfil({
           source={
             imagemCapa
               ? { uri: imagemCapa }
-              : require('../../assets/fundoPerfil.jpg')
+              : require("../../assets/fundoPerfil.jpg")
           }
           resizeMode="cover"
           style={[
@@ -774,7 +859,9 @@ export default function Perfil({
           {ehDono && (
             <Pressable
               style={styles.botaoMais}
-              onPress={() => navigation.navigate('Criar')}
+              onPress={() =>
+                navigation.navigate("Criar")
+              }
             >
               <Ionicons
                 name="add"
@@ -807,8 +894,8 @@ export default function Perfil({
 
                   Linking.openURL(link).catch(() =>
                     Alert.alert(
-                      'Erro',
-                      'Não foi possível abrir o link.',
+                      "Erro",
+                      "Não foi possível abrir o link.",
                     ),
                   );
                 }}
@@ -817,7 +904,7 @@ export default function Perfil({
                 <Ionicons
                   name="link-outline"
                   size={17}
-                  color="#E30613"
+                  color="#ff7a00"
                 />
 
                 <Text style={styles.contato}>
@@ -825,6 +912,55 @@ export default function Perfil({
                 </Text>
               </Pressable>
             )}
+          </View>
+        )}
+
+        {/* ENDEREÇO DO ARTISTA */}
+        {carregandoEndereco && (
+          <View style={styles.enderecoContainer}>
+            <ActivityIndicator
+              size="small"
+              color="#ff7a00"
+            />
+
+            <Text style={styles.enderecoCarregando}>
+              Carregando endereço...
+            </Text>
+          </View>
+        )}
+
+        {!!endereco && !carregandoEndereco && (
+          <View style={styles.enderecoContainer}>
+            <View style={styles.enderecoTitulo}>
+              <Ionicons
+                name="location"
+                size={22}
+                color="#ff7a00"
+              />
+
+              <Text style={styles.enderecoTituloTexto}>
+                Localização
+              </Text>
+            </View>
+
+            <Text style={styles.enderecoTexto}>
+              {enderecoFormatado}
+            </Text>
+
+            <Pressable
+              style={styles.botaoLocalizacao}
+              onPress={abrirLocalizacao}
+            >
+              <Ionicons
+                name="navigate"
+                size={18}
+                color="#fff"
+              />
+
+              <Text style={styles.textoBotaoLocalizacao}>
+                Ver rota no mapa
+              </Text>
+            </Pressable>
           </View>
         )}
 
@@ -839,7 +975,7 @@ export default function Perfil({
 
           <View style={styles.conteudo}>
             {/* EVENTOS */}
-            {aba === 'eventos' && (
+            {aba === "eventos" && (
               <Eventos
                 idArtista={id_artista}
                 nomeArtista={nomeExibido}
@@ -851,7 +987,7 @@ export default function Perfil({
             )}
 
             {/* POSTS */}
-            {aba === 'posts' && (
+            {aba === "posts" && (
               <Posts
                 idArtista={id_artista}
                 nomeArtista={nomeExibido}
@@ -863,7 +999,7 @@ export default function Perfil({
             )}
 
             {/* ARQUIVADOS */}
-            {aba === 'arquivados' && ehDono && (
+            {aba === "arquivados" && ehDono && (
               <View>
                 <Posts
                   idArtista={id_artista}
@@ -893,7 +1029,9 @@ export default function Perfil({
         visible={modalEdicao}
         transparent
         animationType="fade"
-        onRequestClose={() => setModalEdicao(false)}
+        onRequestClose={() =>
+          setModalEdicao(false)
+        }
       >
         <View style={styles.fundoModal}>
           <View style={styles.conteudoModal}>
@@ -903,7 +1041,9 @@ export default function Perfil({
               </Text>
 
               <Pressable
-                onPress={() => setModalEdicao(false)}
+                onPress={() =>
+                  setModalEdicao(false)
+                }
               >
                 <Ionicons
                   name="close"
@@ -1051,142 +1191,29 @@ export default function Perfil({
 const styles = StyleSheet.create({
   tela: {
     flex: 1,
-    backgroundColor: '#000',
-  },
-
-  inputBiografia: {
-    minHeight: 110,
-    paddingTop: 12,
-  },
-
-  contatoContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 7,
-    marginTop: 10,
-  },
-
-  contato: {
-    color: '#E30613',
-    fontSize: 13,
-    textDecorationLine: 'underline',
-    flexShrink: 1,
-  },
-
-  fundoModal: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.75)',
-    justifyContent: 'center',
-    padding: 20,
-  },
-
-  conteudoModal: {
-    backgroundColor: '#1f1f1f',
-    borderRadius: 24,
-    padding: 22,
-    maxHeight: '85%',
-  },
-
-  topoModal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 24,
-  },
-
-  tituloModal: {
-    color: '#fff',
-    fontSize: 22,
-    fontWeight: '800',
-  },
-
-  labelModal: {
-    color: '#ddd',
-    fontSize: 14,
-    fontWeight: '700',
-    marginBottom: 8,
-    marginTop: 14,
-  },
-
-  inputModal: {
-    backgroundColor: '#333',
-    color: '#fff',
-    borderRadius: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 15,
-  },
-
-  botaoFotoModal: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    backgroundColor: '#333',
-    padding: 14,
-    borderRadius: 12,
-    marginTop: 10,
-  },
-
-  textoBotaoFoto: {
-    color: '#fff',
-    fontSize: 14,
-  },
-
-  botaoSalvar: {
-    backgroundColor: '#E30613',
-    borderRadius: 14,
-    padding: 15,
-    alignItems: 'center',
-    marginTop: 26,
-    marginBottom: 8,
-  },
-
-  textoBotaoSalvar: {
-    color: '#fff',
-    fontSize: 15,
-    fontWeight: '800',
-  },
-
-  avatarContainer: {
-    width: 88,
-    height: 88,
-    position: 'relative',
-  },
-
-  botaoEditarAvatar: {
-    position: 'absolute',
-    right: 0,
-    bottom: 0,
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    backgroundColor: '#E30613',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#fff',
+    backgroundColor: "#000",
   },
 
   centralizado: {
     flex: 1,
-    backgroundColor: '#000',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#000",
+    alignItems: "center",
+    justifyContent: "center",
     padding: 24,
   },
 
   textoAuxiliar: {
-    color: '#aaa',
+    color: "#aaa",
     marginTop: 12,
   },
 
   erro: {
-    color: '#ff7777',
-    textAlign: 'center',
+    color: "#ff7777",
+    textAlign: "center",
   },
 
   voltar: {
-    color: '#E30613',
+    color: "#E30613",
     marginTop: 16,
   },
 
@@ -1195,41 +1222,61 @@ const styles = StyleSheet.create({
     minHeight: 220,
     paddingHorizontal: 16,
     paddingBottom: 22,
-    justifyContent: 'space-between',
+    justifyContent: "space-between",
   },
 
   bannerTopo: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
   },
 
   bannerInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 14,
     marginTop: 24,
     paddingRight: 48,
+  },
+
+  avatarContainer: {
+    width: 88,
+    height: 88,
+    position: "relative",
   },
 
   avatar: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#555',
+    backgroundColor: "#555",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
   },
 
   avatarVazio: {
     width: 88,
     height: 88,
     borderRadius: 44,
-    backgroundColor: '#555',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#555",
+    alignItems: "center",
+    justifyContent: "center",
     borderWidth: 2,
-    borderColor: '#fff',
+    borderColor: "#fff",
+  },
+
+  botaoEditarAvatar: {
+    position: "absolute",
+    right: 0,
+    bottom: 0,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#ff7a00",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
 
   dados: {
@@ -1237,48 +1284,115 @@ const styles = StyleSheet.create({
   },
 
   nome: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 20,
-    fontWeight: '800',
+    fontWeight: "800",
   },
 
   email: {
-    color: '#eee',
+    color: "#eee",
     fontSize: 12,
     marginTop: 4,
   },
 
   botaoMais: {
-    position: 'absolute',
+    position: "absolute",
     right: 16,
     bottom: 12,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#E30613',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#E30613",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   // BIOGRAFIA
   bioContainer: {
-    backgroundColor: '#000',
+    backgroundColor: "#000",
     paddingHorizontal: 16,
     paddingTop: 10,
     paddingBottom: 14,
   },
 
   bio: {
-    color: '#bbb',
+    color: "#bbb",
     fontSize: 13,
     lineHeight: 19,
+  },
+
+  contatoContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    marginTop: 12,
+  },
+
+  contato: {
+    color: "#ff7a00",
+    fontSize: 13,
+    textDecorationLine: "underline",
+    flexShrink: 1,
+  },
+
+  // ENDEREÇO
+  enderecoContainer: {
+    backgroundColor: "#171717",
+    marginHorizontal: 16,
+    marginBottom: 16,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#333",
+  },
+
+  enderecoTitulo: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  enderecoTituloTexto: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "800",
+  },
+
+  enderecoTexto: {
+    color: "#ccc",
+    fontSize: 14,
+    lineHeight: 22,
+  },
+
+  enderecoCarregando: {
+    color: "#aaa",
+    marginLeft: 10,
+    fontSize: 13,
+  },
+
+  botaoLocalizacao: {
+    backgroundColor: "#ff7a00",
+    borderRadius: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 12,
+    marginTop: 14,
+  },
+
+  textoBotaoLocalizacao: {
+    color: "#fff",
+    fontWeight: "800",
+    fontSize: 14,
   },
 
   // CONTEÚDO
   painel: {
     flex: 1,
     minHeight: 400,
-    backgroundColor: 'transparent',
+    backgroundColor: "transparent",
     paddingTop: 8,
     paddingHorizontal: 12,
   },
@@ -1286,5 +1400,85 @@ const styles = StyleSheet.create({
   conteudo: {
     flex: 1,
     paddingTop: 0,
+  },
+
+  // MODAL
+  fundoModal: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.75)",
+    justifyContent: "center",
+    padding: 20,
+  },
+
+  conteudoModal: {
+    backgroundColor: "#1f1f1f",
+    borderRadius: 24,
+    padding: 22,
+    maxHeight: "85%",
+  },
+
+  topoModal: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    marginBottom: 24,
+  },
+
+  tituloModal: {
+    color: "#fff",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+
+  labelModal: {
+    color: "#ddd",
+    fontSize: 14,
+    fontWeight: "700",
+    marginBottom: 8,
+    marginTop: 14,
+  },
+
+  inputModal: {
+    backgroundColor: "#333",
+    color: "#fff",
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 13,
+    fontSize: 15,
+  },
+
+  inputBiografia: {
+    minHeight: 110,
+    paddingTop: 12,
+  },
+
+  botaoFotoModal: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    backgroundColor: "#333",
+    padding: 14,
+    borderRadius: 12,
+    marginTop: 10,
+  },
+
+  textoBotaoFoto: {
+    color: "#fff",
+    fontSize: 14,
+  },
+
+  botaoSalvar: {
+    backgroundColor: "#ff7a00",
+    borderRadius: 14,
+    padding: 15,
+    alignItems: "center",
+    marginTop: 26,
+    marginBottom: 8,
+  },
+
+  textoBotaoSalvar: {
+    color: "#fff",
+    fontSize: 15,
+    fontWeight: "800",
   },
 });
