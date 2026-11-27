@@ -24,6 +24,7 @@ export type Publicacao = {
   estado?: string | null;
   curtido: boolean;
   favorito: boolean;
+  destacado?: boolean;
 };
 
 type Props = {
@@ -32,6 +33,14 @@ type Props = {
   onFavoritar: () => void;
   onAbrirPerfil: (id_artista: number) => void;
   mostrarCurtida?: boolean;
+  mostrarFavorito?: boolean;
+  mostrarGerenciamento?: boolean;
+  arquivado?: boolean;
+  onEditar?: () => void;
+  onArquivar?: () => void;
+  onDesarquivar?: () => void;
+  mostrarDestacar?: boolean;
+  onDestacar?: () => void;
 };
 
 function formatarData(data?: string) {
@@ -50,7 +59,11 @@ function formatarData(data?: string) {
 }
 
 function formatarValor(valor?: string | number) {
-  if (valor === undefined || valor === null || valor === '') {
+  if (
+    valor === undefined ||
+    valor === null ||
+    valor === ''
+  ) {
     return null;
   }
 
@@ -72,6 +85,14 @@ export default function CardPublicacao({
   onFavoritar,
   onAbrirPerfil,
   mostrarCurtida = true,
+  mostrarFavorito = true,
+  mostrarGerenciamento = false,
+  arquivado = false,
+  onEditar,
+  onArquivar,
+  onDesarquivar,
+  mostrarDestacar = false,
+  onDestacar,
 }: Props) {
   const localizacao = [item.cidade, item.estado]
     .filter(Boolean)
@@ -79,8 +100,37 @@ export default function CardPublicacao({
 
   const valorFormatado = formatarValor(item.valor);
 
+  const ehDono = mostrarGerenciamento;
+
   return (
-    <View style={styles.card}>
+    <View
+      style={[
+        styles.card,
+        arquivado && styles.cardArquivado,
+      ]}
+    >
+      {/* STATUS DE ARQUIVAMENTO */}
+      {ehDono && arquivado && (
+        <View style={styles.faixaArquivada}>
+          <View style={styles.statusArquivado}>
+            <Ionicons
+              name="archive"
+              size={14}
+              color="#FF7777"
+            />
+
+            <Text style={styles.textoArquivado}>
+              ARQUIVADA
+            </Text>
+          </View>
+
+          <Text style={styles.textoStatus}>
+            Visível somente para você
+          </Text>
+        </View>
+      )}
+
+      {/* CABEÇALHO */}
       <View style={styles.cardTopo}>
         <Pressable
           style={styles.perfilArtista}
@@ -93,12 +143,19 @@ export default function CardPublicacao({
             />
           ) : (
             <View style={styles.avatarPlaceholder}>
-              <Ionicons name="person" size={22} color="#aaa" />
+              <Ionicons
+                name="person"
+                size={22}
+                color="#aaa"
+              />
             </View>
           )}
 
           <View style={styles.identificacao}>
-            <Text style={styles.nome} numberOfLines={1}>
+            <Text
+              style={styles.nome}
+              numberOfLines={1}
+            >
               {item.artista}
             </Text>
 
@@ -110,29 +167,153 @@ export default function CardPublicacao({
           </View>
         </Pressable>
 
-        <Pressable
-          style={styles.estrela}
-          onPress={onFavoritar}
-          hitSlop={10}
-        >
-          <Ionicons
-            name={item.favorito ? 'star' : 'star-outline'}
-            size={27}
-            color={item.favorito ? '#ffb800' : '#8a2a2a'}
-          />
-        </Pressable>
+        {/* AÇÕES */}
+        <View style={styles.acoesTopo}>
+          {/* FAVORITAR */}
+          {mostrarFavorito && !ehDono && (
+            <Pressable
+              style={styles.botaoAcao}
+              onPress={onFavoritar}
+              hitSlop={6}
+              accessibilityLabel={
+                item.favorito
+                  ? 'Remover dos favoritos'
+                  : 'Favoritar artista'
+              }
+            >
+              <Ionicons
+                name={
+                  item.favorito
+                    ? 'star'
+                    : 'star-outline'
+                }
+                size={19}
+                color={
+                  item.favorito
+                    ? '#FFB800'
+                    : '#BDBDBD'
+                }
+              />
+            </Pressable>
+          )}
+
+          {/* GERENCIAMENTO DO DONO */}
+          {ehDono && !arquivado && (
+            <>
+              {mostrarDestacar && (
+                <Pressable
+                  style={[
+                    styles.botaoAcao,
+                    item.destacado &&
+                      styles.botaoDestaqueAtivo,
+                  ]}
+                  onPress={onDestacar}
+                  hitSlop={6}
+                  accessibilityLabel={
+                    item.destacado
+                      ? 'Remover destaque'
+                      : 'Destacar publicação'
+                  }
+                >
+                  <Ionicons
+                    name={
+                      item.destacado
+                        ? 'star'
+                        : 'star-outline'
+                    }
+                    size={19}
+                    color={
+                      item.destacado
+                        ? '#FFB800'
+                        : '#BDBDBD'
+                    }
+                  />
+                </Pressable>
+              )}
+
+              <Pressable
+                style={styles.botaoAcao}
+                onPress={onEditar}
+                hitSlop={6}
+                accessibilityLabel="Editar publicação"
+              >
+                <Ionicons
+                  name="create-outline"
+                  size={19}
+                  color="#E30613"
+                />
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.botaoAcao,
+                  styles.botaoArquivar,
+                ]}
+                onPress={onArquivar}
+                hitSlop={6}
+                accessibilityLabel="Arquivar publicação"
+              >
+                <Ionicons
+                  name="archive-outline"
+                  size={19}
+                  color="#FF7777"
+                />
+              </Pressable>
+            </>
+          )}
+
+          {/* RESTAURAR */}
+          {ehDono && arquivado && (
+            <Pressable
+              style={styles.botaoRestaurar}
+              onPress={onDesarquivar}
+              hitSlop={6}
+              accessibilityLabel="Restaurar publicação"
+            >
+              <Ionicons
+                name="arrow-undo"
+                size={18}
+                color="#fff"
+              />
+
+              <Text style={styles.textoRestaurar}>
+                Restaurar
+              </Text>
+            </Pressable>
+          )}
+        </View>
       </View>
 
+      {/* DESTAQUE */}
+      {item.destacado && !arquivado && (
+        <View style={styles.indicadorDestaque}>
+          <Ionicons
+            name="star"
+            size={13}
+            color="#FFB800"
+          />
+
+          <Text style={styles.textoDestaque}>
+            Em destaque
+          </Text>
+        </View>
+      )}
+
+      {/* TÍTULO */}
       {!!item.titulo && (
         <Text style={styles.titulo}>
           {item.titulo}
         </Text>
       )}
 
+      {/* IMAGEM */}
       {item.imagem ? (
         <Image
           source={{ uri: item.imagem }}
-          style={styles.imagemPost}
+          style={[
+            styles.imagemPost,
+            arquivado && styles.imagemArquivada,
+          ]}
           resizeMode="cover"
         />
       ) : (
@@ -142,21 +323,35 @@ export default function CardPublicacao({
             size={48}
             color="#888"
           />
+
           <Text style={styles.semImagem}>
             Imagem não disponível
           </Text>
         </View>
       )}
 
+      {/* CURTIDA E DATA */}
       <View style={styles.acoes}>
-        {mostrarCurtida && (
-          <Pressable onPress={onCurtir} hitSlop={10}>
+        {mostrarCurtida && !arquivado ? (
+          <Pressable
+            onPress={onCurtir}
+            hitSlop={10}
+            accessibilityLabel={
+              item.curtido ? 'Descurtir' : 'Curtir'
+            }
+          >
             <Ionicons
-              name={item.curtido ? 'heart' : 'heart-outline'}
-              size={26}
-              color="#d8212f"
+              name={
+                item.curtido
+                  ? 'heart'
+                  : 'heart-outline'
+              }
+              size={25}
+              color="#E30613"
             />
           </Pressable>
+        ) : (
+          <View />
         )}
 
         {!!item.data && (
@@ -166,26 +361,37 @@ export default function CardPublicacao({
         )}
       </View>
 
+      {/* LEGENDA */}
       {!!item.legenda && (
         <Text style={styles.legenda}>
           {item.legenda}
         </Text>
       )}
 
+      {/* VALOR */}
       {valorFormatado && (
-        <Text style={styles.informacao}>
-          <Ionicons name="cash-outline" size={15} />
-          {' '}{valorFormatado}
-        </Text>
+        <View style={styles.informacaoContainer}>
+          <Ionicons
+            name="cash-outline"
+            size={16}
+            color="#ACCCB1"
+          />
+
+          <Text style={styles.informacao}>
+            {valorFormatado}
+          </Text>
+        </View>
       )}
 
+      {/* LOCALIZAÇÃO */}
       {!!localizacao && (
         <View style={styles.localizacao}>
           <Ionicons
             name="location-outline"
             size={16}
-            color="#ff9a00"
+            color="#E30613"
           />
+
           <Text style={styles.textoLocalizacao}>
             {localizacao}
           </Text>
@@ -202,6 +408,45 @@ const styles = StyleSheet.create({
     marginBottom: 18,
     padding: 12,
     overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'transparent',
+  },
+
+  cardArquivado: {
+    backgroundColor: '#242424',
+    borderColor: '#633333',
+  },
+
+  faixaArquivada: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: '#493030',
+  },
+
+  statusArquivado: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: '#3B2525',
+    paddingHorizontal: 9,
+    paddingVertical: 5,
+    borderRadius: 7,
+  },
+
+  textoArquivado: {
+    color: '#FF7777',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 0.6,
+  },
+
+  textoStatus: {
+    color: '#888',
+    fontSize: 10,
   },
 
   cardTopo: {
@@ -214,19 +459,20 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
+    minWidth: 0,
   },
 
   avatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#444',
   },
 
   avatarPlaceholder: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#444',
     alignItems: 'center',
     justifyContent: 'center',
@@ -234,12 +480,13 @@ const styles = StyleSheet.create({
 
   identificacao: {
     flex: 1,
-    marginLeft: 10,
+    marginLeft: 9,
+    minWidth: 0,
   },
 
   nome: {
     color: '#fff',
-    fontSize: 15,
+    fontSize: 14,
     fontWeight: '700',
   },
 
@@ -249,13 +496,65 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-  estrela: {
-    padding: 4,
+  acoesTopo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginLeft: 5,
+  },
+
+  botaoAcao: {
+    width: 31,
+    height: 31,
+    borderRadius: 9,
+    backgroundColor: '#353535',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  botaoDestaqueAtivo: {
+    backgroundColor: '#453B27',
+    borderWidth: 1,
+    borderColor: '#927222',
+  },
+
+  botaoArquivar: {
+    backgroundColor: '#3A2929',
+  },
+
+  botaoRestaurar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+    paddingHorizontal: 11,
+    height: 33,
+    borderRadius: 9,
+    backgroundColor: '#247A45',
+  },
+
+  textoRestaurar: {
+    color: '#fff',
+    fontSize: 11,
+    fontWeight: '700',
+  },
+
+  indicadorDestaque: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    marginBottom: 8,
+  },
+
+  textoDestaque: {
+    color: '#FFB800',
+    fontSize: 12,
+    fontWeight: '600',
   },
 
   titulo: {
     color: '#fff',
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '700',
     marginBottom: 10,
   },
@@ -265,6 +564,11 @@ const styles = StyleSheet.create({
     height: 230,
     borderRadius: 10,
     backgroundColor: '#444',
+  },
+
+  imagemArquivada: {
+    borderWidth: 1,
+    borderColor: '#493030',
   },
 
   imagemPlaceholder: {
@@ -292,7 +596,7 @@ const styles = StyleSheet.create({
 
   data: {
     color: '#aaa',
-    fontSize: 12,
+    fontSize: 11,
   },
 
   legenda: {
@@ -302,10 +606,16 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
 
+  informacaoContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 5,
+  },
+
   informacao: {
     color: '#ACCCB1',
     fontSize: 13,
-    marginTop: 4,
   },
 
   localizacao: {

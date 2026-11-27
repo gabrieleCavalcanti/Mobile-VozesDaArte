@@ -185,6 +185,14 @@
     return requisicao<T>(rota, 'POST', dados);
   }
 
+  // PATCH
+export async function apiPatch<T>(
+  rota: string,
+  dados?: unknown
+): Promise<T> {
+  return requisicao<T>(rota, 'PATCH', dados);
+}
+
   // POST PARA ENVIO DE ARQUIVOS (FORM DATA)
 export async function apiPostFormData<T>(
   rota: string,
